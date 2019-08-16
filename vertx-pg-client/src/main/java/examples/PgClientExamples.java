@@ -32,6 +32,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.PemTrustOptions;
 import io.vertx.docgen.Source;
+import io.vertx.sqlclient.mapper.SqlCollectors;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -576,5 +577,40 @@ public class PgClientExamples {
         System.out.println("Failed to send cancelling request");
       }
     });
+  }
+    
+  public void mapping01Example(Pool pool) {
+    pool.query("SELECT * FROM users",
+      SqlCollectors.toObject(User::new),
+      ar -> {
+        if (ar.succeeded()) {
+          for (User user : ar.result().value()) {
+            System.out.println("Got: " + user.getName());
+          }
+        } else {
+          System.out.println("Failure: " + ar.cause().getMessage());
+        }
+      });
+  }
+
+  public static class User {
+    private int id;
+    private String name;
+
+    public int getId() {
+      return id;
+    }
+
+    public void setId(int id) {
+      this.id = id;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public void setName(String name) {
+      this.name = name;
+    }
   }
 }
