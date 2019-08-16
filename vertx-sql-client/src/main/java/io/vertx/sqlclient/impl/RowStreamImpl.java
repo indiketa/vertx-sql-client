@@ -14,49 +14,54 @@
  * limitations under the License.
  *
  */
-
 package io.vertx.sqlclient.impl;
 
 import io.vertx.sqlclient.Cursor;
-import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.RowStream;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.Tuple;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
+import io.vertx.sqlclient.SqlResult;
 
 import java.util.Iterator;
+import java.util.function.Function;
+import java.util.stream.Collector;
 
-public class RowStreamImpl implements RowStream<Row>, Handler<AsyncResult<RowSet>> {
+public class RowStreamImpl<X, T extends Iterable<X>, R extends SqlResultBase<T, R>, L extends SqlResult<T>> implements RowStream<X>, Handler<AsyncResult<L>> {
 
   private final PreparedQueryImpl ps;
   private final int fetch;
   private final Tuple params;
+  private final Collector<Row, ?, T> collector;
+  private final Function<T, R> factory;
 
   private Handler<Void> endHandler;
-  private Handler<Row> rowHandler;
+  private Handler<X> rowHandler;
   private Handler<Throwable> exceptionHandler;
   private long demand;
   private boolean emitting;
   private Cursor cursor;
 
-  private Iterator<Row> result;
+  private Iterator<X> result;
 
-  RowStreamImpl(PreparedQueryImpl ps, int fetch, Tuple params) {
+  RowStreamImpl(PreparedQueryImpl ps, int fetch, Tuple params, Function<T, R> factory, Collector<Row, ?, T> collector) {
     this.ps = ps;
     this.fetch = fetch;
     this.params = params;
     this.demand = Long.MAX_VALUE;
+    this.collector = collector;
+    this.factory = factory;
   }
 
   @Override
-  public synchronized RowStream<Row> exceptionHandler(Handler<Throwable> handler) {
+  public synchronized RowStream<X> exceptionHandler(Handler<Throwable> handler) {
     exceptionHandler = handler;
     return this;
   }
 
   @Override
-  public RowStream<Row> handler(Handler<Row> handler) {
+  public RowStream<X> handler(Handler<X> handler) {
     Cursor c;
     synchronized (this) {
       if (handler != null) {
@@ -75,17 +80,17 @@ public class RowStreamImpl implements RowStream<Row>, Handler<AsyncResult<RowSet
         return this;
       }
     }
-    c.read(fetch, this);
+    c.read(fetch, factory,  collector, this);
     return this;
   }
 
   @Override
-  public synchronized RowStream<Row> pause() {
+  public synchronized RowStream<X> pause() {
     demand = 0L;
     return this;
   }
 
-  public RowStream<Row> fetch(long amount) {
+  public RowStream<X> fetch(long amount) {
     if (amount < 0L) {
       throw new IllegalArgumentException("Invalid fetch amount " + amount);
     }
@@ -103,18 +108,18 @@ public class RowStreamImpl implements RowStream<Row>, Handler<AsyncResult<RowSet
   }
 
   @Override
-  public RowStream<Row> resume() {
+  public RowStream<X> resume() {
     return fetch(Long.MAX_VALUE);
   }
 
   @Override
-  public synchronized RowStream<Row> endHandler(Handler<Void> handler) {
+  public synchronized RowStream<X> endHandler(Handler<Void> handler) {
     endHandler = handler;
     return this;
   }
 
   @Override
-  public void handle(AsyncResult<RowSet> ar) {
+  public void handle(AsyncResult<L> ar) {
     if (ar.failed()) {
       Handler<Throwable> handler;
       synchronized (RowStreamImpl.this) {
@@ -125,14 +130,15 @@ public class RowStreamImpl implements RowStream<Row>, Handler<AsyncResult<RowSet
         handler.handle(ar.cause());
       }
     } else {
-      result = ar.result().iterator();
+      result = ar.result().value().iterator();
       checkPending();
     }
   }
 
   @Override
   public void close() {
-    close(ar -> {});
+    close(ar -> {
+    });
   }
 
   @Override
@@ -172,7 +178,7 @@ public class RowStreamImpl implements RowStream<Row>, Handler<AsyncResult<RowSet
           result = null;
           emitting = false;
           if (cursor.hasMore()) {
-            cursor.read(fetch, this);
+            cursor.read(fetch, factory, collector, this);
             break;
           } else {
             cursor = null;

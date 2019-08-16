@@ -14,7 +14,6 @@
  * limitations under the License.
  *
  */
-
 package io.vertx.sqlclient.impl;
 
 import io.vertx.sqlclient.impl.command.CloseCursorCommand;
@@ -72,13 +71,13 @@ class PreparedQueryImpl implements PreparedQuery {
   }
 
   <A, R> PreparedQuery execute(Tuple args,
-                               int fetch,
-                               String cursorId,
-                               boolean suspended,
-                               boolean singleton,
-                               Collector<Row, A, R> collector,
-                               QueryResultHandler<R> resultHandler,
-                               Handler<AsyncResult<Boolean>> handler) {
+    int fetch,
+    String cursorId,
+    boolean suspended,
+    boolean singleton,
+    Collector<Row, A, R> collector,
+    QueryResultHandler<R> resultHandler,
+    Handler<AsyncResult<Boolean>> handler) {
     if (context == Vertx.currentContext()) {
       String msg = ps.prepare((List<Object>) args);
       if (msg != null) {
@@ -132,7 +131,7 @@ class PreparedQueryImpl implements PreparedQuery {
     Function<R1, R2> factory,
     Collector<Row, ?, R1> collector,
     Handler<AsyncResult<R3>> handler) {
-    for  (Tuple args : argsList) {
+    for (Tuple args : argsList) {
       String msg = ps.prepare((List<Object>) args);
       if (msg != null) {
         handler.handle(Future.failedFuture(msg));
@@ -148,7 +147,20 @@ class PreparedQueryImpl implements PreparedQuery {
 
   @Override
   public RowStream<Row> createStream(int fetch, Tuple args) {
-    return new RowStreamImpl(this, fetch, args);
+    return createStream(fetch, args, RowSetImpl.FACTORY, RowSetImpl.COLLECTOR);
+  }
+
+  @Override
+  public <X, T extends Iterable<X>> RowStream<X> createStream(int fetch, Tuple args, Collector<Row, ?, T> collector) {
+    return createStream(fetch, args, SqlResultImpl::new, collector);
+  }
+
+  private <X, T extends Iterable<X>, R extends SqlResultBase<T, R>> RowStream<X> createStream(
+    int fetch, 
+    Tuple args, 
+    Function<T, R> factory, 
+    Collector<Row, ?, T> collector) {
+    return new RowStreamImpl<>(this, fetch, args, factory, collector);
   }
 
   @Override

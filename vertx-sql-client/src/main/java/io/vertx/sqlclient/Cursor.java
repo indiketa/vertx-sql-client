@@ -17,9 +17,13 @@
 
 package io.vertx.sqlclient;
 
+import io.vertx.codegen.annotations.GenIgnore;
 import io.vertx.codegen.annotations.VertxGen;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
+import io.vertx.sqlclient.impl.SqlResultBase;
+import java.util.function.Function;
+import java.util.stream.Collector;
 
 /**
  * A cursor that reads progressively rows from the database, it is useful for reading very large result sets.
@@ -34,6 +38,25 @@ public interface Cursor {
    * @param handler the handler for the result
    */
   void read(int count, Handler<AsyncResult<RowSet>> handler);
+
+  /**
+   * Read rows from the cursor, the result is provided asynchronously to the
+   * {@code handler}.
+   *
+   * @param <T> Results iterable returned from collector
+   * @param <L> SqlResultType containing the collector iterable
+   * @param <R> 
+   * @param count the amount of rows to read
+   * @param factory the factory to use
+   * @param collector the collector to use
+   * @param handler the handler for the result
+   */
+  @GenIgnore
+  <T extends Iterable, L extends SqlResult<T>, R extends SqlResultBase<T, R>> void read(
+    int count,
+    Function<T, R> factory,
+    Collector<Row, ?, T> collector,
+    Handler<AsyncResult<L>> handler);
 
   /**
    * Returns {@code true} when the cursor has results in progress and the {@link #read} should be called to retrieve

@@ -14,17 +14,20 @@
  * limitations under the License.
  *
  */
-
 package io.vertx.sqlclient.impl;
 
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.sqlclient.Cursor;
+import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
+import io.vertx.sqlclient.SqlResult;
 import io.vertx.sqlclient.Tuple;
 
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collector;
 
 /**
  * @author <a href="mailto:julien@julienviet.com">Julien Viet</a>
@@ -36,7 +39,7 @@ public class CursorImpl implements Cursor {
 
   private String id;
   private boolean closed;
-  private SqlResultBuilder<RowSet, RowSetImpl, RowSet> result;
+  private SqlResultBuilder result;
 
   CursorImpl(PreparedQueryImpl ps, Tuple params) {
     this.ps = ps;
@@ -53,13 +56,18 @@ public class CursorImpl implements Cursor {
 
   @Override
   public synchronized void read(int count, Handler<AsyncResult<RowSet>> handler) {
+    read(count, RowSetImpl.FACTORY, RowSetImpl.COLLECTOR, handler); // RowSet instanceof SqlResult<RowSet>
+  }
+
+  @Override
+  public synchronized <T extends Iterable, L extends SqlResult<T>, R extends SqlResultBase<T, R>> void read(int count, Function<T, R> factory, Collector<Row, ?, T> collector, Handler<AsyncResult<L>> handler) {
     if (id == null) {
       id = UUID.randomUUID().toString();
-      result = new SqlResultBuilder<>(RowSetImpl.FACTORY, handler);
-      ps.execute(params, count, id, false, false, RowSetImpl.COLLECTOR, result, result);
+      result = new SqlResultBuilder<>(factory, handler);
+      ps.execute(params, count, id, false, false, collector, result, result);
     } else if (result.isSuspended()) {
-      result = new SqlResultBuilder<>(RowSetImpl.FACTORY, handler);
-      ps.execute(params, count, id, true, false, RowSetImpl.COLLECTOR, result, result);
+      result = new SqlResultBuilder<>(factory, handler);
+      ps.execute(params, count, id, true, false, collector, result, result);
     } else {
       throw new IllegalStateException();
     }

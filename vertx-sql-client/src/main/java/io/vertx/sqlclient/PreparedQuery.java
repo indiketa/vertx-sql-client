@@ -98,6 +98,20 @@ public interface PreparedQuery {
   RowStream<Row> createStream(int fetch, Tuple args);
 
   /**
+   * Execute the prepared query with a cursor and createStream the result. The
+   * createStream opens a cursor with a {@code fetch} size to fetch the results.
+   * <p/>
+   * Note: this requires to be in a transaction, since cursors require it.
+   *
+   * @param fetch the cursor fetch size
+   * @param args the prepared query arguments
+   * @param collector the collector
+   * @return the createStream
+   */
+  @GenIgnore
+  <X, R extends Iterable<X>> RowStream<X> createStream(int fetch, Tuple args, Collector<Row, ?, R> collector);
+
+  /**
    * Execute a batch.
    *
    * @param argsList the list of tuple for the batch
